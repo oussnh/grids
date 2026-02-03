@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triple Axis Skew Construction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #ffffff;
+            color: #1f2937;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+            max-width: 500px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid #e5e7eb;
+            padding: 16px;
+            border-radius: 8px;
+            pointer-events: auto;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-font {
+            font-family: 'ui-monospace', monospace;
+            font-size: 0.7rem;
+        }
+
+        .highlight-keep {
+            color: #fbbf24;
+            font-weight: bold;
+        }
+
+        .highlight-coord {
+            color: #60a5fa;
+        }
+
+        #progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: #3b82f6;
+            transition: width 0.1s linear;
+        }
+
+        .node-label {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #374151;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-family: monospace;
+            transform: translate(-50%, -150%);
+            white-space: nowrap;
+            border: 1px solid #d1d5db;
+            z-index: 5;
+        }
+
+        .axis-label {
+            position: absolute;
+            pointer-events: none;
+            font-weight: 900;
+            font-size: 18px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+            z-index: 6;
+        }
+
+        #labels-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        canvas {
+            cursor: grab;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 700px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close-btn {
+            color: #9ca3af;
+            float: right;
+            font-size: 32px;
+            font-weight: bold;
+            line-height: 1;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close-btn:hover {
+            color: #374151;
+        }
+
+        #modal-code {
+            font-family: 'ui-monospace', monospace;
+            font-size: 1rem;
+            line-height: 1.6;
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            white-space: pre;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-overlay">
+        <div class="panel">
+            <div class="mb-3">
+                <div class="flex flex-col gap-2 mb-2">
+                    <!-- <label class="text-xs text-gray-500 font-semibold">Grid Type:</label> -->
+                    <select id="grid-mode-select"
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded text-sm font-medium text-gray-900 hover:border-blue-400 focus:border-blue-500 focus:outline-none transition">
+                        <option value="triangular">🔷 Triangular Grid</option>
+                        <option value="hexagonal">⬡ Hexagonal Grid</option>
+                        <option value="rect2d">⬛ 2D Rectangle (Manhattan)</option>
+                        <option value="euclidean3d">🎲 3D Euclidean</option>
+                    </select>
+                </div>
+                <h1 class="text-xl font-bold text-gray-900 mb-2 hidden" id="grid-title">Triangular Grid</h1>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">Coordinates: <span class="text-blue-600 font-semibold">i, j, k</span>
+                <span id="coord-desc"></span>where <span class="text-gray-700">k = -(i+j)</span></span>
+            </p>
+
+            <button id="open-details-btn"
+                class="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2 px-4 rounded text-sm font-medium transition flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+                View Calculation Details
+            </button>
+        </div>
+
+        <div class="panel">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Status</span>
+                <span id="status-tag" class="text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-700">SCANNING</span>
+            </div>
+            <div class="flex gap-4 items-center">
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-500">i</span>
+                    <span id="current-i" class="text-lg font-mono font-bold text-red-400">0</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-500">j</span>
+                    <span id="current-j" class="text-lg font-mono font-bold text-green-400">0</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-500">k</span>
+                    <span id="current-k" class="text-lg font-mono font-bold text-blue-400">0</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-500">Tuple</span>
+                    <span id="current-result" class="text-lg font-bold text-amber-400 font-mono">(0,0,0)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="flex justify-between text-xs mb-2 text-slate-400">
+                <span>Speed</span>
+                <span id="speed-val">100ms</span>
+            </div>
+            <input type="range" id="speed-slider" min="10" max="1000" value="100" class="w-full accent-amber-500 mb-4">
+
+            <div class="border-t border-slate-700 pt-4 mb-4">
+                <div class="flex justify-between text-xs mb-2 text-slate-400">
+                    <span>Visibility Range</span>
+                    <span id="visibility-val">1</span>
+                </div>
+                <input type="range" id="visibility-slider" min="1" max="5" value="1"
+                    class="w-full accent-green-500 mb-2">
+                <p class="text-xs text-slate-500 italic">Click a node to see its neighbors</p>
+            </div>
+
+            <div class="border-t border-slate-700 pt-4 mb-4">
+                <h3 class="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Grid Boundaries</h3>
+
+                <!-- Preset Shapes Dropdown -->
+                <div class="mb-3">
+                    <label class="text-xs text-slate-400 mb-1 block">Preset Shapes:</label>
+                    <select id="preset-shapes"
+                        class="w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-xs text-gray-900 hover:border-blue-400 focus:border-blue-500 focus:outline-none transition">
+                        <option value="">-- Select a Preset --</option>
+                        <!-- Options will be populated dynamically based on grid mode -->
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400">i range:</span>
+                        <div class="flex gap-2 items-center">
+                            <input type="number" id="minI" value="0"
+                                class="w-14 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                            <span class="text-gray-400 text-xs">to</span>
+                            <input type="number" id="maxI" value="6"
+                                class="w-14 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400">j range:</span>
+                        <div class="flex gap-2 items-center">
+                            <input type="number" id="minJ" value="0"
+                                class="w-14 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                            <span class="text-gray-400 text-xs">to</span>
+                            <input type="number" id="maxJ" value="6"
+                                class="w-14 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400">k range:</span>
+                        <div class="flex gap-2 items-center">
+                            <input type="number" id="minK" value="-12"
+                                class="w-14 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                            <span class="text-gray-400 text-xs">to</span>
+                            <input type="number" id="maxK" value="0"
+                                class="w-14 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button id="pause-btn"
+                    class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded text-sm font-medium transition flex items-center justify-center gap-2">
+                    <svg id="pause-icon" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                    <span id="pause-text">Pause</span>
+                </button>
+                <button id="reset-btn"
+                    class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded text-sm font-medium transition">Restart</button>
+            </div>
+
+            <div class="mt-3 pt-3 border-t border-gray-200">
+                <button id="hide-red-btn"
+                    class="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded text-sm font-medium transition mb-2">
+                    Hide Red Nodes
+                </button>
+                <button id="toggle-labels-btn"
+                    class="w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 py-2 rounded text-sm font-medium transition mb-2">
+                    Hide Coordinate Labels
+                </button>
+                <button id="toggle-walls-btn"
+                    class="w-full bg-gray-800 hover:bg-gray-900 text-white py-2 rounded text-sm font-medium transition">
+                    ✓ Draw Walls
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Calculation Details -->
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="close-modal">&times;</span>
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">Calculation Details</h2>
+
+            <!-- Grid Mode Section -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Grid Mode</h3>
+                <div id="modal-grid-mode" class="p-4 rounded-lg border">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Algorithm Code</h3>
+                <div id="modal-code"></div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Node Filtering Logic</h3>
+                <div id="modal-filter-logic" class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Coordinate System</h3>
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <p class="text-sm text-gray-700 mb-2"><strong>Coordinates:</strong> <span
+                            class="text-blue-600 font-mono">i, j, k</span></p>
+                    <p class="text-sm text-gray-700 mb-2"><strong>Constraint:</strong> <span class="font-mono">k = -(i +
+                            j)</span></p>
+                    <p class="text-sm text-gray-700"><strong>Position:</strong> <span class="font-mono">pos = i × Vec_I
+                            + j × Vec_J</span></p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Vector Basis</h3>
+                <div class="space-y-2">
+                    <div class="bg-red-50 p-3 rounded border border-red-200">
+                        <p class="text-sm font-mono text-gray-800"><strong class="text-red-600">Vec_I:</strong> (1.0,
+                            0.0, 0.0) - Red axis</p>
+                    </div>
+                    <div class="bg-green-50 p-3 rounded border border-green-200">
+                        <p class="text-sm font-mono text-gray-800"><strong class="text-green-600">Vec_J:</strong> (0.5,
+                            0.866, 0.0) - Green axis (120°)</p>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                        <p class="text-sm font-mono text-gray-800"><strong class="text-blue-600">Vec_Z:</strong> (-0.5,
+                            0.866, 0.0) - Blue axis (240°)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Neighbor Visibility Formulas</h3>
+                <div id="modal-neighbor-formulas" class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Current Boundaries</h3>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                        <p class="text-xs text-gray-500 mb-1">i range</p>
+                        <p class="font-mono text-sm" id="modal-i-range">0 to 6</p>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                        <p class="text-xs text-gray-500 mb-1">j range</p>
+                        <p class="font-mono text-sm" id="modal-j-range">0 to 6</p>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                        <p class="text-xs text-gray-500 mb-1">k range</p>
+                        <p class="font-mono text-sm" id="modal-k-range">-12 to 0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="labels-container"></div>
+    <div id="progress-bar" style="width: 0%"></div>
+
+    <script>
+        (function () {
+            let scene, camera, renderer, scannerBall;
+            const sceneGroup = new THREE.Group();
+            const nodesGroup = new THREE.Group();
+            const gridLinesGroup = new THREE.Group();
+            const labelsContainer = document.getElementById('labels-container');
+
+            let minI = 0, maxI = 6;
+            let minJ = 0, maxJ = 6;
+            let minK = -12, maxK = 0;
+            let scanI = 0, scanJ = 0, scanK = 0;
+            let isRunning = true;
+            let stepDelay = 100;
+            const nodeLabels = [];
+            const axisLabels = [];
+
+            // Mouse Interaction
+            let isDragging = false;
+            let isPanning = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            let currentRotationY = 0; // Default rotation to the left
+            let currentRotationX = 0; // Slight tilt down
+
+            // Pan and Zoom
+            let cameraDistance = 10;
+            let panX = 5; // Position graph on the left side of screen
+            let panY = 2;
+
+            // Display options
+            let gridMode = 'triangular'; // 'triangular' or 'hexagonal'
+            let hideRedNodes = false;
+            let hideLabels = false;
+            let drawWalls = true; // Toggle for drawing walls as black nodes
+
+            // Visibility feature
+            let visibilityRange = 1;
+            let selectedNode = null;
+            let selectedNodeMesh = null;
+            const neighborHighlights = new THREE.Group();
+            sceneGroup.add(neighborHighlights);
+            const nodeDataMap = new Map(); // Maps mesh to {i, j, k} data
+
+            // Geometry vectors - initialized in updateBasisVectors
+            const unit = 1.0;
+            let vecI, vecJ, vecK;
+
+            function updateBasisVectors() {
+                if (gridMode === 'rect2d') {
+                    // 90 degrees axes for Rectangle (2D)
+                    vecI = new THREE.Vector3(unit, 0, 0);
+                    vecJ = new THREE.Vector3(0, unit, 0);
+                    vecK = new THREE.Vector3(0, 0, 0); // Z is 0
+                } else if (gridMode === 'euclidean3d') {
+                    // 90 degrees axes for Cubic 3D
+                    vecI = new THREE.Vector3(unit, 0, 0);
+                    vecJ = new THREE.Vector3(0, unit, 0);
+                    vecK = new THREE.Vector3(0, 0, unit); // Z is height
+                } else {
+                    // Triangular/Hexagonal: 60 degrees vectors
+                    vecI = new THREE.Vector3(unit, 0, 0);
+                    vecJ = new THREE.Vector3(unit * Math.cos(Math.PI / 3), unit * Math.sin(Math.PI / 3), 0);
+                    vecK = new THREE.Vector3(unit * Math.cos(2 * Math.PI / 3), unit * Math.sin(2 * Math.PI / 3), 0);
+                }
+            }
+
+            // Initialize vectors
+            updateBasisVectors();
+
+            function init() {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0xffffff); // White background
+                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                document.body.appendChild(renderer.domElement);
+
+                scene.add(sceneGroup);
+                sceneGroup.add(nodesGroup);
+                sceneGroup.add(gridLinesGroup);
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                scene.add(ambientLight);
+
+                addAxes();
+
+                const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
+                const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                scannerBall = new THREE.Mesh(sphereGeo, sphereMat);
+                sceneGroup.add(scannerBall);
+
+                camera.position.set(0, 0, cameraDistance);
+                camera.lookAt(panX, panY, 0);
+
+                setupInteractions();
+                animate();
+                runLogicStep();
+            }
+
+            function createLabel(text, color, className) {
+                const el = document.createElement('div');
+                el.className = className;
+                el.textContent = text;
+                el.style.color = color;
+                labelsContainer.appendChild(el);
+                return el;
+            }
+
+            function addAxes() {
+                const origin = new THREE.Vector3(0, 0, 0);
+                const length = 5;
+
+                // i Axis - Red
+                sceneGroup.add(new THREE.ArrowHelper(vecI.clone().normalize(), origin, length, 0xef4444));
+                const markI = new THREE.Object3D();
+                markI.position.copy(vecI.clone().normalize().multiplyScalar(length + 0.5));
+                sceneGroup.add(markI);
+                axisLabels.push({ el: createLabel('i', '#ef4444', 'axis-label'), marker: markI });
+
+                // j Axis - Green
+                sceneGroup.add(new THREE.ArrowHelper(vecJ.clone().normalize(), origin, length, 0x22c55e));
+                const markJ = new THREE.Object3D();
+                markJ.position.copy(vecJ.clone().normalize().multiplyScalar(length + 0.5));
+                sceneGroup.add(markJ);
+                axisLabels.push({ el: createLabel('j', '#22c55e', 'axis-label'), marker: markJ });
+
+                // k Axis - Blue
+                sceneGroup.add(new THREE.ArrowHelper(vecK.clone().normalize(), origin, length, 0x3b82f6));
+                const markK = new THREE.Object3D();
+                markK.position.copy(vecK.clone().normalize().multiplyScalar(length + 0.5));
+                sceneGroup.add(markK);
+                axisLabels.push({ el: createLabel('k', '#3b82f6', 'axis-label'), marker: markK });
+            }
+
+            // Get immediate neighbors for a node
+            function getImmediateNeighbors(i, j, k) {
+                if (gridMode === 'rect2d') {
+                    // Rectangle grid: 4 neighbors (Manhattan), k is always 0
+                    return [
+                        { i: i + 1, j, k: 0 },
+                        { i: i - 1, j, k: 0 },
+                        { i, j: j + 1, k: 0 },
+                        { i, j: j - 1, k: 0 }
+                    ];
+                } else if (gridMode === 'euclidean3d') {
+                    // Cubic grid: 6 orthogonal neighbors
+                    return [
+                        { i: i + 1, j, k },
+                        { i: i - 1, j, k },
+                        { i, j: j + 1, k },
+                        { i, j: j - 1, k },
+                        { i, j, k: k + 1 },
+                        { i, j, k: k - 1 }
+                    ];
+                }
+
+                // Always check all 6 triangular directions
+                const candidates = [
+                    { i: i + 1, j, k: k - 1 },
+                    { i: i - 1, j, k: k + 1 },
+                    { i, j: j + 1, k: k - 1 },
+                    { i, j: j - 1, k: k + 1 },
+                    { i: i + 1, j: j - 1, k },
+                    { i: i - 1, j: j + 1, k }
+                ];
+
+                if (gridMode === 'triangular') {
+                    // Triangular grid: all 6 neighbors
+                    return candidates;
+                } else {
+                    // Hexagonal grid: filter out hex vertices (red nodes)
+                    // Only keep neighbors that are NOT hex vertices
+                    return candidates.filter(n => {
+                        const isHexVertex = ((n.i - n.j) % 3 === 0);
+                        return !isHexVertex;
+                    });
+                }
+            }
+
+            // Calculate triangular distance (max of |di|, |dj|, |dk|)
+            function getTriangularDistance(i1, j1, k1, i2, j2, k2) {
+                const di = Math.abs(i2 - i1);
+                const dj = Math.abs(j2 - j1);
+                const dk = Math.abs(k2 - k1);
+                return Math.max(di, dj, dk);
+            }
+
+            // Get all neighbors within visibility range using BFS
+            // Returns {results: array, visited: Map}
+            function getNeighborsInRange(i, j, k, range) {
+                const visited = new Map();
+                const queue = [{ i, j, k, dist: 0, parent: null }];
+                const results = [];
+                visited.set(`${i},${j},${k}`, { i, j, k, parent: null, dist: 0 });
+
+                while (queue.length > 0) {
+                    const current = queue.shift();
+
+                    if (current.dist > 0 && current.dist <= range) {
+                        results.push({
+                            node: { i: current.i, j: current.j, k: current.k },
+                            parent: current.parent,
+                            dist: current.dist
+                        });
+                    }
+
+                    if (current.dist < range) {
+                        const neighbors = getImmediateNeighbors(current.i, current.j, current.k);
+                        for (const neighbor of neighbors) {
+                            const key = `${neighbor.i},${neighbor.j},${neighbor.k}`;
+                            if (!visited.has(key)) {
+                                const parentNode = { i: current.i, j: current.j, k: current.k };
+                                visited.set(key, {
+                                    i: neighbor.i,
+                                    j: neighbor.j,
+                                    k: neighbor.k,
+                                    parent: parentNode,
+                                    dist: current.dist + 1
+                                });
+                                queue.push({
+                                    ...neighbor,
+                                    dist: current.dist + 1,
+                                    parent: parentNode
+                                });
+                            }
+                        }
+                    }
+                }
+
+                return { results, visited };
+            }
+
+            // Clear neighbor highlights
+            function clearNeighborHighlights() {
+                while (neighborHighlights.children.length > 0) {
+                    neighborHighlights.remove(neighborHighlights.children[0]);
+                }
+                selectedNode = null;
+                selectedNodeMesh = null;
+            }
+
+            // Highlight a node and its neighbors
+            function highlightNodeNeighbors(mesh, i, j, k) {
+                clearNeighborHighlights();
+                selectedNode = { i, j, k };
+                selectedNodeMesh = mesh;
+
+                // Add green border to selected node
+                const selectedGeo = new THREE.SphereGeometry(0.13, 16, 16);
+                const selectedMat = new THREE.MeshBasicMaterial({
+                    color: 0x00ff00,
+                    transparent: true,
+                    opacity: 0.5,
+                    wireframe: true
+                });
+                const selectedHighlight = new THREE.Mesh(selectedGeo, selectedMat);
+                selectedHighlight.position.copy(mesh.position);
+                neighborHighlights.add(selectedHighlight);
+
+                // Get neighbors with path information
+                const { results, visited } = getNeighborsInRange(i, j, k, visibilityRange);
+
+                // Draw all edges in the BFS tree (showing the actual paths)
+                visited.forEach((nodeInfo, key) => {
+                    if (!nodeInfo.parent) return; // Skip the root node
+
+                    // Find meshes for current node and its parent
+                    let currentMesh = null;
+                    let parentMesh = null;
+
+                    for (const [nodeMesh, data] of nodeDataMap.entries()) {
+                        if (data.i === nodeInfo.i && data.j === nodeInfo.j && data.k === nodeInfo.k) {
+                            currentMesh = nodeMesh;
+                        }
+                        if (nodeInfo.parent && data.i === nodeInfo.parent.i &&
+                            data.j === nodeInfo.parent.j && data.k === nodeInfo.parent.k) {
+                            parentMesh = nodeMesh;
+                        }
+                        if (currentMesh && parentMesh) break;
+                    }
+
+                    if (currentMesh && parentMesh) {
+                        // Highlight the current node if it's within range
+                        if (nodeInfo.dist <= visibilityRange && nodeInfo.dist > 0) {
+                            const neighborGeo = new THREE.SphereGeometry(0.12, 16, 16);
+                            const neighborMat = new THREE.MeshBasicMaterial({
+                                color: 0x00ff00,
+                                transparent: true,
+                                opacity: 0.3
+                            });
+                            const neighborHighlight = new THREE.Mesh(neighborGeo, neighborMat);
+                            neighborHighlight.position.copy(currentMesh.position);
+                            neighborHighlights.add(neighborHighlight);
+                        }
+
+                        // Draw edge from parent to current (showing the path)
+                        const points = [parentMesh.position.clone(), currentMesh.position.clone()];
+                        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+                        const lineMat = new THREE.LineBasicMaterial({
+                            color: 0x00ff00,
+                            linewidth: 2,
+                            transparent: true,
+                            opacity: 0.6
+                        });
+                        const line = new THREE.Line(lineGeo, lineMat);
+                        neighborHighlights.add(line);
+                    }
+                });
+            }
+
+            function setupInteractions() {
+                window.addEventListener('resize', onWindowResize, false);
+
+                // Mouse down - detect left or right click
+                renderer.domElement.addEventListener('mousedown', (e) => {
+                    if (e.button === 0) { // Left click - rotate
+                        isDragging = true;
+                    } else if (e.button === 2) { // Right click - pan
+                        isPanning = true;
+                    }
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                });
+
+                // Prevent context menu on right click
+                renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+                window.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    isPanning = false;
+                });
+
+                window.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        // Rotate
+                        currentRotationY += (e.clientX - previousMousePosition.x) * 0.01;
+                        currentRotationX += (e.clientY - previousMousePosition.y) * 0.01;
+                    } else if (isPanning) {
+                        // Pan
+                        const deltaX = (e.clientX - previousMousePosition.x) * 0.02;
+                        const deltaY = (e.clientY - previousMousePosition.y) * 0.02;
+                        panX -= deltaX;
+                        panY += deltaY;
+                    }
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                });
+
+                // Mouse wheel - zoom
+                renderer.domElement.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    cameraDistance += e.deltaY * 0.01;
+                    cameraDistance = Math.max(2, Math.min(50, cameraDistance)); // Clamp between 2 and 50
+                });
+
+                document.getElementById('speed-slider').oninput = (e) => {
+                    stepDelay = parseInt(e.target.value);
+                    document.getElementById('speed-val').textContent = stepDelay + 'ms';
+                };
+
+                // Visibility slider
+                document.getElementById('visibility-slider').oninput = (e) => {
+                    visibilityRange = parseInt(e.target.value);
+                    document.getElementById('visibility-val').textContent = visibilityRange;
+                    // Re-highlight if a node is selected
+                    if (selectedNode && selectedNodeMesh) {
+                        highlightNodeNeighbors(selectedNodeMesh, selectedNode.i, selectedNode.j, selectedNode.k);
+                    }
+                };
+
+                // Node click detection
+                const raycaster = new THREE.Raycaster();
+                const mouse = new THREE.Vector2();
+
+                renderer.domElement.addEventListener('click', (event) => {
+                    // Calculate mouse position in normalized device coordinates
+                    const rect = renderer.domElement.getBoundingClientRect();
+                    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                    // Update raycaster
+                    raycaster.setFromCamera(mouse, camera);
+
+                    // Check for intersections with nodes
+                    const intersects = raycaster.intersectObjects(nodesGroup.children);
+
+                    if (intersects.length > 0) {
+                        const clickedMesh = intersects[0].object;
+                        const nodeData = nodeDataMap.get(clickedMesh);
+
+                        if (nodeData) {
+                            highlightNodeNeighbors(clickedMesh, nodeData.i, nodeData.j, nodeData.k);
+                        }
+                    } else {
+                        // Clicked on empty space - clear highlights
+                        clearNeighborHighlights();
+                    }
+                });
+
+                // Boundary input listeners
+                const boundaryInputs = ['minI', 'maxI', 'minJ', 'maxJ', 'minK', 'maxK'];
+
+                const getBoundVal = (id, def) => {
+                    const val = parseInt(document.getElementById(id).value);
+                    return isNaN(val) ? def : val;
+                };
+
+                boundaryInputs.forEach(id => {
+                    document.getElementById(id).onchange = () => {
+                        minI = getBoundVal('minI', 0);
+                        maxI = getBoundVal('maxI', 6);
+                        minJ = getBoundVal('minJ', 0);
+                        maxJ = getBoundVal('maxJ', 6);
+                        minK = getBoundVal('minK', -12);
+                        maxK = getBoundVal('maxK', 0);
+                        resetAnimation();
+                    };
+                });
+
+                // Preset shapes configurations - separated by grid mode
+                const presetShapes = {
+                    triangular: {
+                        'hex-big': {
+                            minI: -5, maxI: 5,
+                            minJ: -5, maxJ: 5,
+                            minK: -5, maxK: 5,
+                            icon: '⬡',
+                            name: 'Hexagon (Symmetric)'
+                        },
+                        'tri-up': {
+                            minI: -8, maxI: 2,
+                            minJ: -8, maxJ: 2,
+                            minK: -8, maxK: 2,
+                            icon: '🔺',
+                            name: 'Triangle (Up)'
+                        },
+                        'tri-down': {
+                            minI: -2, maxI: 8,
+                            minJ: -2, maxJ: 8,
+                            minK: -2, maxK: 8,
+                            icon: '🔻',
+                            name: 'Triangle (Down)'
+                        },
+                        'rhombus-big': {
+                            minI: -5, maxI: 5,
+                            minJ: -5, maxJ: 5,
+                            minK: -20, maxK: 20,
+                            icon: '💎',
+                            name: 'Rhombus (Diagonal)'
+                        },
+                        'rectangle': {
+                            minI: -7, maxI: 7,
+                            minJ: -2, maxJ: 2,
+                            minK: -20, maxK: 20,
+                            icon: '▭',
+                            name: 'Rectangle (Strip)'
+                        },
+                        'trapezoid': {
+                            minI: -6, maxI: 6,
+                            minJ: -3, maxJ: 5,
+                            minK: -6, maxK: 4,
+                            icon: '▱',
+                            name: 'Trapezoid (Clipped)'
+                        }
+                    },
+                    rect2d: {
+                        'rect-mid': {
+                            minI: 0, maxI: 6,
+                            minJ: 0, maxJ: 6,
+                            minK: -12, maxK: 0,
+                            icon: '⬛',
+                            name: 'Square (10x10)'
+                        },
+                        'rect-wide': {
+                            minI: 0, maxI: 8,
+                            minJ: 0, maxJ: 4,
+                            minK: -12, maxK: 0,
+                            icon: '▭',
+                            name: 'Wide Strip'
+                        }
+                    },
+                    euclidean3d: {
+                        'cube': {
+                            minI: 0, maxI: 3,
+                            minJ: 0, maxJ: 3,
+                            minK: 0, maxK: 3,
+                            icon: '🧊',
+                            name: 'Cube (3x3x3)'
+                        },
+                    },
+                    hexagonal: {
+                        'triangle': {
+                            minI: 0, maxI: 10,
+                            minJ: 0, maxJ: 10,
+                            minK: -10, maxK: 0,
+                            icon: '🔺',
+                            name: 'Triangle'
+                        },
+                        'rectangle': {
+                            minI: 0, maxI: 12,
+                            minJ: 0, maxJ: 8,
+                            minK: -20, maxK: 0,
+                            icon: '▭',
+                            name: 'Rectangle'
+                        },
+                        'parallelogram': {
+                            minI: 0, maxI: 10,
+                            minJ: 0, maxJ: 10,
+                            minK: -20, maxK: 0,
+                            icon: '▱',
+                            name: 'Parallelogram'
+                        }
+                    }
+                };
+
+                // Function to populate preset dropdown based on current grid mode
+                function updatePresetDropdown() {
+                    const dropdown = document.getElementById('preset-shapes');
+                    const currentPresets = presetShapes[gridMode];
+
+                    // Clear existing options except the first one
+                    dropdown.innerHTML = '<option value="">-- Select a Preset --</option>';
+
+                    // Add options for current grid mode
+                    Object.keys(currentPresets).forEach(key => {
+                        const preset = currentPresets[key];
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.textContent = `${preset.icon} ${preset.name}`;
+                        dropdown.appendChild(option);
+                    });
+                }
+
+                // Preset shapes dropdown listener
+                document.getElementById('preset-shapes').onchange = (e) => {
+                    const selectedPreset = e.target.value;
+                    const currentPresets = presetShapes[gridMode];
+
+                    if (selectedPreset && currentPresets[selectedPreset]) {
+                        const preset = currentPresets[selectedPreset];
+
+                        // Update the input fields
+                        document.getElementById('minI').value = preset.minI;
+                        document.getElementById('maxI').value = preset.maxI;
+                        document.getElementById('minJ').value = preset.minJ;
+                        document.getElementById('maxJ').value = preset.maxJ;
+                        document.getElementById('minK').value = preset.minK;
+                        document.getElementById('maxK').value = preset.maxK;
+
+                        // Update the internal variables
+                        minI = preset.minI;
+                        maxI = preset.maxI;
+                        minJ = preset.minJ;
+                        maxJ = preset.maxJ;
+                        minK = preset.minK;
+                        maxK = preset.maxK;
+
+                        // Reset the animation with new boundaries
+                        resetAnimation();
+
+                        // Reset dropdown to default after applying
+                        setTimeout(() => {
+                            e.target.value = '';
+                        }, 100);
+                    }
+                };
+
+                // Initialize dropdown with current grid mode
+                updatePresetDropdown();
+
+                // Grid Mode Selector Handler
+                document.getElementById('grid-mode-select').onchange = (e) => {
+                    const mode = e.target.value;
+                    gridMode = mode;
+
+                    updateBasisVectors();
+
+                    // Clear and re-add axes to show correct orientation
+                    sceneGroup.children.forEach(child => {
+                        if (child.type === 'ArrowHelper' || (child.children && child.children.length === 0 && child !== scannerBall && child !== nodesGroup && child !== gridLinesGroup && child !== neighborHighlights)) {
+                            // Removing axis helpers/markers crudely
+                            child.visible = false; // Easier than removing from array during iteration
+                        }
+                    });
+                    // Re-add axes properly? Or just reset scene.
+                    // simpler: remove all children except groups
+                    while (sceneGroup.children.length > 0) {
+                        sceneGroup.remove(sceneGroup.children[0]);
+                    }
+                    sceneGroup.add(nodesGroup);
+                    sceneGroup.add(gridLinesGroup);
+                    sceneGroup.add(neighborHighlights);
+                    sceneGroup.add(scannerBall);
+                    axisLabels.forEach(l => l.el.remove());
+                    axisLabels.length = 0;
+                    addAxes();
+
+                    document.getElementById('grid-title').textContent =
+                        mode === 'rect2d' ? '2D Rectangle (Manhattan)' :
+                            mode === 'hexagonal' ? 'Hexagonal Grid' :
+                                mode === 'euclidean3d' ? '3D Euclidean' : 'Triangular Grid';
+
+                    if (mode === 'hexagonal') {
+                        hideRedNodes = true;
+                        document.getElementById('hide-red-btn').textContent = 'Show Red Nodes';
+                        document.getElementById('hide-red-btn').className = 'w-full bg-green-100 hover:bg-green-200 text-green-700 py-2 rounded text-sm font-medium transition mb-2';
+                    } else {
+                        hideRedNodes = false;
+                        document.getElementById('hide-red-btn').textContent = 'Hide Red Nodes';
+                        document.getElementById('hide-red-btn').className = 'w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded text-sm font-medium transition mb-2';
+                    }
+
+                    // Update coordinate description
+                    const coordDesc = document.getElementById('coord-desc');
+                    if (mode === 'rect2d') {
+                        coordDesc.innerHTML = 'where <span class="text-gray-700">k = 0</span>';
+                    } else if (mode === 'euclidean3d') {
+                        coordDesc.innerHTML = '(Cartesian X, Y, Z)';
+                    } else {
+                        coordDesc.innerHTML = 'where <span class="text-gray-700">k = -(i+j)</span>';
+                    }
+
+                    updatePresetDropdown();
+                    resetAnimation();
+                };
+
+                // Hide red nodes toggle
+                // Toggle Coordinate Labels
+                document.getElementById('toggle-labels-btn').onclick = () => {
+                    hideLabels = !hideLabels;
+                    const btn = document.getElementById('toggle-labels-btn');
+                    if (hideLabels) {
+                        btn.textContent = 'Show Coordinate Labels';
+                        btn.className = 'w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded text-sm font-medium transition mb-2';
+                    } else {
+                        btn.textContent = 'Hide Coordinate Labels';
+                        btn.className = 'w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 py-2 rounded text-sm font-medium transition mb-2';
+                    }
+                };
+
+                document.getElementById('hide-red-btn').onclick = () => {
+                    hideRedNodes = !hideRedNodes;
+                    const btn = document.getElementById('hide-red-btn');
+
+                    if (hideRedNodes) {
+                        btn.textContent = 'Show Red Nodes';
+                        btn.className = 'w-full bg-green-100 hover:bg-green-200 text-green-700 py-2 rounded text-sm font-medium transition mb-2';
+                    } else {
+                        btn.textContent = 'Hide Red Nodes';
+                        btn.className = 'w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded text-sm font-medium transition mb-2';
+                    }
+
+                    resetAnimation();
+                };
+
+                // Toggle walls button
+                document.getElementById('toggle-walls-btn').onclick = () => {
+                    drawWalls = !drawWalls;
+                    const btn = document.getElementById('toggle-walls-btn');
+
+                    if (drawWalls) {
+                        btn.textContent = '✓ Draw Walls';
+                        btn.className = 'w-full bg-gray-800 hover:bg-gray-900 text-white py-2 rounded text-sm font-medium transition';
+                    } else {
+                        btn.textContent = '✗ Draw Walls';
+                        btn.className = 'w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded text-sm font-medium transition';
+                    }
+
+                    resetAnimation();
+                };
+
+                document.getElementById('reset-btn').onclick = resetAnimation;
+
+                const pauseBtn = document.getElementById('pause-btn');
+                pauseBtn.onclick = () => {
+                    isRunning = !isRunning;
+                    if (isRunning) {
+                        document.getElementById('pause-text').textContent = "Pause";
+                        document.getElementById('status-tag').textContent = "SCANNING";
+                        document.getElementById('status-tag').className = "text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-700";
+                        runLogicStep();
+                    } else {
+                        document.getElementById('pause-text').textContent = "Resume";
+                        document.getElementById('status-tag').textContent = "PAUSED";
+                        document.getElementById('status-tag').className = "text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-700";
+                    }
+                };
+
+                // Modal functionality
+                const modal = document.getElementById('details-modal');
+                const openBtn = document.getElementById('open-details-btn');
+                const closeBtn = document.getElementById('close-modal');
+
+                openBtn.onclick = () => {
+                    // Static algorithm code
+                    const codeText = `for (i = 0; i <= 6; i++) {
+    for (j = 0; j <= 6; j++) {
+        k = -(i + j);
+        pos = i*Vec_I + j*Vec_J;
+        nodes.push({i, j, k});
+    }
+}`;
+                    document.getElementById('modal-code').textContent = codeText;
+
+                    // Update boundary ranges
+                    document.getElementById('modal-i-range').textContent = `${minI} to ${maxI}`;
+                    document.getElementById('modal-j-range').textContent = `${minJ} to ${maxJ}`;
+                    document.getElementById('modal-k-range').textContent = `${minK} to ${maxK}`;
+
+                    // Update Grid Mode section
+                    const gridModeDiv = document.getElementById('modal-grid-mode');
+                    if (gridMode === 'triangular') {
+                        gridModeDiv.className = 'p-4 rounded-lg border bg-blue-50 border-blue-200';
+                        gridModeDiv.innerHTML = `
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-2xl">🔷</span>
+                                <strong class="text-lg text-blue-700">Triangular Grid</strong>
+                            </div>
+                            <p class="text-sm text-gray-700 mb-2">All nodes are included in the calculation.</p>
+                            <p class="text-sm text-gray-600"><strong>Status:</strong> ${hideRedNodes ? 'Red nodes hidden (for visualization)' : 'All nodes visible'}</p>
+                        `;
+                    } else {
+                        gridModeDiv.className = 'p-4 rounded-lg border bg-amber-50 border-amber-200';
+                        gridModeDiv.innerHTML = `
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-2xl">⬡</span>
+                                <strong class="text-lg text-amber-700">Hexagonal Grid</strong>
+                            </div>
+                            <p class="text-sm text-gray-700 mb-2">Red nodes (hexagon vertices) are excluded from the grid.</p>
+                            <p class="text-sm text-gray-600"><strong>Status:</strong> Only yellow nodes are included</p>
+                        `;
+                    }
+
+                    // Update Node Filtering Logic section
+                    const filterLogicDiv = document.getElementById('modal-filter-logic');
+                    if (gridMode === 'triangular') {
+                        filterLogicDiv.innerHTML = `
+                            <p class="text-sm font-mono mb-3 text-gray-800">
+                                <strong>Node Types:</strong>
+                            </p>
+                            <div class="space-y-2 mb-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 bg-black rounded-full"></div>
+                                    <span class="text-xs"><strong>Black (Walls):</strong> Nodes at exact boundaries (i=min/max, j=min/max, k=min/max)</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 bg-yellow-400 rounded-full"></div>
+                                    <span class="text-xs"><strong>Yellow (Interior):</strong> All other nodes</span>
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded border border-gray-300 mb-3">
+                                <code class="text-xs">
+isWall = (i === minI || i === maxI ||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j === minJ || j === maxJ ||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k === minK || k === maxK);<br>
+<br>
+if (isWall) color = BLACK;<br>
+else color = YELLOW;
+                                </code>
+                            </div>
+                            <p class="text-xs text-gray-600">
+                                ${hideRedNodes ? '⚠️ Red nodes are hidden for visualization but still calculated' : '✓ All nodes are visible and calculated'}
+                            </p>
+                        `;
+                    } else {
+                        filterLogicDiv.innerHTML = `
+                            <p class="text-sm font-mono mb-3 text-gray-800">
+                                <strong>Node Types:</strong>
+                            </p>
+                            <div class="space-y-2 mb-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 bg-black rounded-full"></div>
+                                    <span class="text-xs"><strong>Black (Walls):</strong> Nodes at boundaries ±1 (i, j, k = min, min+1, max-1, max)</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 bg-yellow-400 rounded-full"></div>
+                                    <span class="text-xs"><strong>Yellow (Interior):</strong> Non-wall, non-hex-vertex nodes</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 bg-red-400 rounded-full opacity-30"></div>
+                                    <span class="text-xs"><strong>Red (Excluded):</strong> Hexagon vertices where (i - j) % 3 = 0</span>
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded border border-gray-300 mb-3">
+                                <code class="text-xs">
+const isHexVertex = ((i - j) % 3 === 0);<br>
+const isWall = (i === minI || i === minI+1 || i === maxI-1 || i === maxI ||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j === minJ || j === minJ+1 || j === maxJ-1 || j === maxJ ||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k === minK || k === minK+1 || k === maxK-1 || k === maxK);<br>
+<br>
+if (isWall) color = BLACK;<br>
+else if (isHexVertex) color = RED; // Excluded<br>
+else color = YELLOW;
+                                </code>
+                            </div>
+                            <p class="text-xs text-gray-600">
+                                Hexagonal grids have thicker walls (±1 from boundary) to maintain structure
+                            </p>
+                        `;
+                    }
+
+                    // Update Neighbor Visibility Formulas section
+                    const neighborFormulasDiv = document.getElementById('modal-neighbor-formulas');
+                    if (gridMode === 'triangular') {
+                        neighborFormulasDiv.innerHTML = `
+                            <p class="text-sm font-semibold text-purple-800 mb-3">Triangular Grid: BFS with Path Tracking</p>
+                            <p class="text-xs text-gray-700 mb-3">Uses Breadth-First Search to find neighbors and track the path to reach them:</p>
+                            <div class="bg-white p-3 rounded border border-purple-300 mb-3">
+                                <code class="text-xs">
+// Start from center node<br>
+queue = [{node: (i,j,k), dist: 0, parent: null}]<br>
+<br>
+while (queue not empty) {<br>
+&nbsp;&nbsp;current = queue.pop()<br>
+&nbsp;&nbsp;if (current.dist <= range) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;add current to results<br>
+&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;// Get 6 immediate neighbors<br>
+&nbsp;&nbsp;for each neighbor in [+i, -i, +j, -j, +i-j, -i+j] {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if (not visited) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.push({neighbor, dist: current.dist+1, parent: current})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+                                </code>
+                            </div>
+                            <p class="text-xs text-gray-600">
+                                <strong>Visualization:</strong> Green lines show the actual path through intermediate nodes<br>
+                                <strong>Range 1:</strong> 6 neighbors | <strong>Range 2:</strong> 18 neighbors | <strong>Range 3:</strong> 36 neighbors
+                            </p>
+                        `;
+                    } else {
+                        neighborFormulasDiv.innerHTML = `
+                            <p class="text-sm font-semibold text-purple-800 mb-3">Hexagonal Grid: BFS + Hex Vertex Filter</p>
+                            <p class="text-xs text-gray-700 mb-3">Same BFS algorithm, but filters out hex vertices (red nodes):</p>
+                            <div class="bg-white p-3 rounded border border-purple-300 mb-3">
+                                <code class="text-xs">
+// Start from center node<br>
+queue = [{node: (i,j,k), dist: 0, parent: null}]<br>
+<br>
+while (queue not empty) {<br>
+&nbsp;&nbsp;current = queue.pop()<br>
+&nbsp;&nbsp;if (current.dist <= range) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;add current to results<br>
+&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;// Get 6 candidates, filter hex vertices<br>
+&nbsp;&nbsp;candidates = [+i, -i, +j, -j, +i-j, -i+j]<br>
+&nbsp;&nbsp;neighbors = candidates.filter(n => (n.i - n.j) % 3 !== 0)<br>
+<br>
+&nbsp;&nbsp;for each neighbor {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if (not visited) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.push({neighbor, dist: current.dist+1, parent: current})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+                                </code>
+                            </div>
+                            <p class="text-xs text-gray-600">
+                                <strong>Visualization:</strong> Green lines show step-by-step paths (no direct jumps)<br>
+                                <strong>Range 1:</strong> ~3 neighbors | <strong>Range 2:</strong> ~12 neighbors | <strong>Range 3:</strong> ~24 neighbors
+                            </p>
+                        `;
+                    }
+
+                    modal.style.display = 'block';
+                };
+
+                closeBtn.onclick = () => {
+                    modal.style.display = 'none';
+                };
+
+                // Close modal when clicking outside of it
+                window.onclick = (event) => {
+                    if (event.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                };
+
+                // Close modal with Escape key
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && modal.style.display === 'block') {
+                        modal.style.display = 'none';
+                    }
+                });
+            }
+
+            function resetAnimation() {
+                scanI = minI;
+                scanJ = minJ;
+                scanK = minK; // Reset k scanner
+                while (nodesGroup.children.length > 0) nodesGroup.remove(nodesGroup.children[0]);
+                while (gridLinesGroup.children.length > 0) gridLinesGroup.remove(gridLinesGroup.children[0]);
+                nodeLabels.forEach(l => l.el.remove());
+                nodeLabels.length = 0;
+                clearNeighborHighlights(); // Clear visibility highlights
+                nodeDataMap.clear(); // Clear node data map
+                scannerBall.visible = true; // Show the scanner ball when restarting
+                isRunning = true;
+                runLogicStep();
+            }
+
+            function runLogicStep() {
+                if (!isRunning) return;
+
+                if (gridMode === 'euclidean3d') {
+                    // 3D Scanning Logic (I, J, K loops)
+                    const px = scanI * vecI.x + scanJ * vecJ.x + scanK * vecK.x;
+                    const py = scanI * vecI.y + scanJ * vecJ.y + scanK * vecK.y;
+                    const pz = scanI * vecI.z + scanJ * vecJ.z + scanK * vecK.z;
+
+                    document.getElementById('current-i').textContent = scanI;
+                    document.getElementById('current-j').textContent = scanJ;
+                    document.getElementById('current-k').textContent = scanK;
+                    document.getElementById('current-result').textContent = `(${scanI}, ${scanJ}, ${scanK})`;
+
+                    addNode(px, py, pz, scanI, scanJ, scanK);
+                    scannerBall.position.set(px, py, pz);
+
+                    // Increment counters for 3D
+                    scanK++;
+                    if (scanK > maxK) {
+                        scanK = minK;
+                        scanJ++;
+                        if (scanJ > maxJ) {
+                            scanJ = minJ;
+                            scanI++;
+                            if (scanI > maxI) {
+                                isRunning = false;
+                                scannerBall.visible = false;
+                                document.getElementById('status-tag').textContent = "COMPLETE";
+                                document.getElementById('status-tag').className = "text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-700";
+                            }
+                        }
+                    }
+
+                    // Simple progress bar for 3D (approx)
+                    const iRatio = (scanI - minI) / (maxI - minI + 1) || 0;
+                    document.getElementById('progress-bar').style.width = (iRatio * 100) + "%";
+
+                } else {
+                    // 2D Scanning Logic (I, J loops, K derived)
+                    let kVal = -(scanI + scanJ);
+                    let isInsideK = (kVal >= minK && kVal <= maxK);
+
+                    if (gridMode === 'rect2d') {
+                        kVal = 0; // Third param always 0 for 2D Rectangle
+                        isInsideK = true; // Ignore k bounds for rectangle
+                    }
+
+                    // Check if k is within bounds (if applicable)
+                    if (isInsideK) {
+                        const px = scanI * vecI.x + scanJ * vecJ.x;
+                        const py = scanI * vecI.y + scanJ * vecJ.y;
+
+                        document.getElementById('current-i').textContent = scanI;
+                        document.getElementById('current-j').textContent = scanJ;
+                        document.getElementById('current-k').textContent = kVal;
+                        document.getElementById('current-result').textContent = `(${scanI}, ${scanJ}, ${kVal})`;
+
+                        addNode(px, py, 0, scanI, scanJ, kVal);
+                        scannerBall.position.set(px, py, 0);
+                    }
+
+                    // Increment counters for 2D
+                    scanJ++;
+                    if (scanJ > maxJ) {
+                        scanJ = minJ;
+                        scanI++;
+                        if (scanI > maxI) {
+                            isRunning = false;
+                            scannerBall.visible = false;
+                            document.getElementById('status-tag').textContent = "COMPLETE";
+                            document.getElementById('status-tag').className = "text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-700";
+                        }
+                    }
+
+                    const totalSteps = (maxI - minI + 1) * (maxJ - minJ + 1);
+                    const currentStep = ((scanI - minI) * (maxJ - minJ + 1)) + (scanJ - minJ);
+                    const progress = currentStep / totalSteps;
+                    document.getElementById('progress-bar').style.width = (progress * 100) + "%";
+                }
+
+                if (isRunning) {
+                    setTimeout(runLogicStep, stepDelay);
+                }
+            }
+
+            function addNode(x, y, z, i, j, k) {
+                // Correct formula for hexagon vertices in triangular lattice
+                // A node is a "hexagon vertex" (to be removed) if (i - j) % 3 === 0
+                const isHexVertex = ((i - j) % 3 === 0);
+
+                // Skip red nodes if hideRedNodes is enabled
+                if (hideRedNodes && isHexVertex) {
+                    return; // Don't create hexagon vertices
+                }
+
+                // Wall detection logic
+                let isWall = false;
+                if (gridMode === 'triangular' || gridMode === 'euclidean3d') {
+                    // For triangular: wall if at exact boundary
+                    isWall = (i === minI || i === maxI ||
+                        j === minJ || j === maxJ ||
+                        k === minK || k === maxK);
+                } else if (gridMode === 'rect2d') {
+                    // Rectangle: wall at boundaries
+                    isWall = (i === minI || i === maxI || j === minJ || j === maxJ);
+                } else {
+                    // For hexagonal: wall if at boundary or ±1 from boundary
+                    isWall = (i === minI || i === minI + 1 || i === maxI - 1 || i === maxI ||
+                        j === minJ || j === minJ + 1 || j === maxJ - 1 || j === maxJ ||
+                        k === minK || k === minK + 1 || k === maxK - 1 || k === maxK);
+                }
+
+                const geometry = new THREE.SphereGeometry(0.1, 16, 16);
+
+                // Color logic based on grid mode and wall status
+                let color, emissive, transparent, opacity;
+
+                if (isWall && drawWalls) {
+                    // Walls are black only if drawWalls is enabled
+                    color = 0x000000;
+                    emissive = 0x000000;
+                    transparent = false;
+                    opacity = 1.0;
+                } else if (gridMode === 'triangular' || gridMode === 'euclidean3d' || gridMode === 'rect2d') {
+                    // In triangular/rect mode: all non-wall nodes are yellow
+                    color = 0xfbbf24;
+                    emissive = 0x451a03;
+                    transparent = false;
+                    opacity = 1.0;
+                } else {
+                    // In hexagonal mode: hex vertices are red, others are yellow
+                    color = isHexVertex ? 0xef4444 : 0xfbbf24;
+                    emissive = isHexVertex ? 0x7f1d1d : 0x451a03;
+                    transparent = isHexVertex;
+                    opacity = isHexVertex ? 0.3 : 1.0;
+                }
+
+                const material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: emissive,
+                    transparent: transparent,
+                    opacity: opacity
+                });
+                const node = new THREE.Mesh(geometry, material);
+                node.position.set(x, y, z);
+                nodesGroup.add(node);
+
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'node-label';
+                if (isWall && drawWalls) {
+                    labelDiv.style.borderColor = '#000000';
+                    labelDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+                    labelDiv.style.color = '#000000';
+                    labelDiv.style.fontWeight = 'bold';
+                } else if (isHexVertex) {
+                    labelDiv.style.borderColor = '#ef4444';
+                    labelDiv.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                }
+                labelDiv.textContent = `(${i}, ${j}, ${k})`;
+                labelsContainer.appendChild(labelDiv);
+                nodeLabels.push({ el: labelDiv, mesh: node });
+
+                // Store node data for click detection
+                nodeDataMap.set(node, { i, j, k });
+
+                nodesGroup.children.forEach(other => {
+                    if (other instanceof THREE.Mesh && other !== node) {
+                        const dist = node.position.distanceTo(other.position);
+                        if (Math.abs(dist - unit) < 0.1) {
+                            createEdge(node.position, other.position);
+                        }
+                    }
+                });
+            }
+
+            function createEdge(start, end) {
+                const points = [start.clone(), end.clone()];
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.6 });
+                const line = new THREE.Line(geometry, material);
+                gridLinesGroup.add(line);
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            function updateLabels() {
+                const widthHalf = window.innerWidth / 2;
+                const heightHalf = window.innerHeight / 2;
+
+                [...nodeLabels, ...axisLabels].forEach(label => {
+                    // Check if processing a node label (has mesh) AND labels are hidden
+                    if (hideLabels && label.mesh) {
+                        label.el.style.display = 'none';
+                        return;
+                    }
+
+                    const vector = new THREE.Vector3();
+                    label.marker ? label.marker.getWorldPosition(vector) : label.mesh.getWorldPosition(vector);
+                    vector.project(camera);
+                    const x = (vector.x * widthHalf) + widthHalf;
+                    const y = -(vector.y * heightHalf) + heightHalf;
+                    if (vector.z > 1) {
+                        label.el.style.display = 'none';
+                    } else {
+                        label.el.style.display = 'block';
+                        label.el.style.left = `${x}px`;
+                        label.el.style.top = `${y}px`;
+                    }
+                });
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                // Apply rotation
+                sceneGroup.rotation.y = currentRotationY;
+                sceneGroup.rotation.x = currentRotationX;
+
+                // Apply zoom and pan
+                camera.position.set(panX, panY, cameraDistance);
+                camera.lookAt(panX, panY, 0);
+
+                updateLabels();
+                renderer.render(scene, camera);
+            }
+
+            window.onload = init;
+        })();
+    </script>
+    <div
+        class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded-full shadow-lg border border-gray-200 text-xs font-medium text-gray-600 z-50 pointer-events-none">
+        🖱️ Left Click: Rotate &nbsp;•&nbsp; ✋ Right Click: Pan &nbsp;•&nbsp; 🔍 Scroll: Zoom
+    </div>
+</body>
+
+</html>
